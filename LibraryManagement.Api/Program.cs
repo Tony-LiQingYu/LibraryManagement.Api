@@ -1,11 +1,19 @@
+using LibraryManagement.Api.DataAccess;
 using LibraryManagement.Api.Endpoints;
+using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+builder.Services.AddControllers();
 builder.Services.AddOpenApi();
+builder.Services.AddRouting(options => options.LowercaseUrls = true);
+builder.Services.AddDbContext<LibraryDbContext>(options =>
+{
+    options.UseNpgsql(builder.Configuration.GetConnectionString("LibraryDb"));
+});
 
 var app = builder.Build();
 
@@ -14,6 +22,7 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
     app.MapScalarApiReference();
+    await DataSeeder.SeedAsync(app.Services);
 }
 
 app.UseHttpsRedirection();
@@ -37,6 +46,7 @@ app.UseHttpsRedirection();
 //})
 //.WithName("GetWeatherForecast");
 app.MapCategoryEndPoints();
+app.MapControllers();
 
 app.Run();
 
