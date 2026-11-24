@@ -1,6 +1,12 @@
-﻿using LibraryManagement.Api.DataAccess;
+﻿using FluentValidation;
+using LibraryManagement.Api.DataAccess;
+using LibraryManagement.Api.DTOs.Categories;
 using LibraryManagement.Api.Entities;
+using LibraryManagement.Api.Extensions;
+using LibraryManagement.Api.Filters;
+using LibraryManagement.Api.Mapping;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace LibraryManagement.Api.Endpoints;
@@ -12,12 +18,12 @@ public static class CategoriesEndpoints
         var group = app.MapGroup("/api/categories").WithTags("Categories");
         group.MapGet("/", GetAll);
         group.MapGet("/{id:int}", GetById).Produces<Category>(StatusCodes.Status200OK).Produces(StatusCodes.Status404NotFound).WithName("GetCategoryById");
-        group.MapPost("/", Create).ProducesProblem(StatusCodes.Status400BadRequest).ProducesProblem(StatusCodes.Status409Conflict);
-        group.MapPut("/{id:int}", Update).ProducesProblem(StatusCodes.Status400BadRequest).ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict);
+        group.MapPost("/", Create).AddEndpointFilter<ValidationFilter<CreateCategoryDto>>().ProducesProblem(StatusCodes.Status400BadRequest).ProducesProblem(StatusCodes.Status409Conflict);
+        group.MapPut("/{id:int}", Update).AddEndpointFilter<ValidationFilter<UpdateCategoryDto>>().ProducesProblem(StatusCodes.Status400BadRequest).ProducesProblem(StatusCodes.Status404NotFound).ProducesProblem(StatusCodes.Status409Conflict);
         group.MapDelete("/{id:int}", Delete).ProducesProblem(StatusCodes.Status404NotFound);
     }
 
-    private static async Task<Results<Ok<Category>, ProblemHttpResult>> GetById(int id, LibraryDbContext dbContext)
+    private static async Task<Results<Ok<ReadCategoryDto>, ProblemHttpResult>> GetById(int id, LibraryDbContext dbContext, CategoryMapper mapper)
     {
         var category = await dbContext.Categories.FindAsync(id);
         if (category == null)
@@ -25,39 +31,34 @@ public static class CategoriesEndpoints
                 detail: $"A category with Id {id} has not been found.",
                 statusCode: StatusCodes.Status404NotFound
                 );
-        return TypedResults.Ok(category);
+        var readDto = mapper.ToReadDto(category);
+        return TypedResults.Ok(readDto);
     }
-    private static async Task<Ok<List<Category>>> GetAll(LibraryDbContext dbContext)
+
+    private static async Task<Ok<List<ReadCategoryDto>>> GetAll(LibraryDbContext dbContext, CategoryMapper mapper)
     {
         var categories = await dbContext.Categories.ToListAsync();
-        return TypedResults.Ok(categories);
+        var readDtos = categories.Select(mapper.ToReadDto).ToList();
+        return TypedResults.Ok(readDtos);
     }
 
-    private static async Task<Results<CreatedAtRoute<Category>, ProblemHttpResult>> Create(Category category, LibraryDbContext dbContext)
-    {
-        if (string.IsNullOrEmpty(category.Name))
+    private static async Task<Results<CreatedAtRoute<ReadCategoryDto>, ProblemHttpResult>> Create(CreateCategoryDto categoryDto, LibraryDbContext dbContext, CategoryMapper mapper)
+    { 
+        if (await dbContext.Categories.AnyAsync(c => c.Name == categoryDto.Name))
             return TypedResults.Problem(
-                detail: $"A category with name cannot be empty.",
-                statusCode: StatusCodes.Status400BadRequest
-                );
-        if (await dbContext.Categories.AnyAsync(c => c.Id == category.Id))
-            return TypedResults.Problem(
-                detail: $"A category with Id {category.Id} already exists.",
+                detail: $"A category with Name {categoryDto.Name} already exists.",
                 statusCode: StatusCodes.Status409Conflict
                 );
-        if (await dbContext.Categories.AnyAsync(c => c.Name == category.Name))
-            return TypedResults.Problem(
-                detail: $"A category with Name {category.Name} already exists.",
-                statusCode: StatusCodes.Status409Conflict
-                );
+        var category = mapper.ToEntity(categoryDto);
         dbContext.Categories.Add(category);
         await dbContext.SaveChangesAsync();
-        return TypedResults.CreatedAtRoute(category, "GetCategoryById", new {id = category.Id});
+        var readDto = mapper.ToReadDto(category);
+        return TypedResults.CreatedAtRoute(readDto, "GetCategoryById", new { id = category.Id });
     }
 
-    private static async Task<Results<Ok<Category>, ProblemHttpResult>> Update(int id, Category category, LibraryDbContext dbContext)
+    private static async Task<Results<Ok<ReadCategoryDto>, ProblemHttpResult>> Update(int id, UpdateCategoryDto categoryDto, LibraryDbContext dbContext, CategoryMapper mapper)
     {
-        if (string.IsNullOrEmpty(category.Name))
+        if (string.IsNullOrEmpty(categoryDto.Name))
             return TypedResults.Problem(
                 detail: "Category name cannot be empty.",
                 statusCode: StatusCodes.Status400BadRequest
@@ -68,14 +69,15 @@ public static class CategoriesEndpoints
                 detail: $"A category with Id {id} cannot be found.",
                 statusCode: StatusCodes.Status404NotFound
                 );
-        if (await dbContext.Categories.AnyAsync(c => c.Id != id && c.Name == category.Name))
+        if (await dbContext.Categories.AnyAsync(c => c.Id != id && c.Name == categoryDto.Name))
             return TypedResults.Problem(
-                detail: $"A category with name {category.Name} already exists.",
+                detail: $"A category with name {categoryDto.Name} already exists.",
                 statusCode: StatusCodes.Status409Conflict
                 );
-        existingCategory.Name = category.Name;
+        mapper.UpdateEntity(categoryDto, existingCategory);
         await dbContext.SaveChangesAsync();
-        return TypedResults.Ok(existingCategory);
+        var readDto = mapper.ToReadDto(existingCategory);
+        return TypedResults.Ok(readDto);
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> Delete(int id, LibraryDbContext dbContext)
