@@ -1,5 +1,11 @@
+using FluentValidation;
 using LibraryManagement.Api.DataAccess;
+using LibraryManagement.Api.DTOs.Categories;
 using LibraryManagement.Api.Endpoints;
+using LibraryManagement.Api.Filters;
+using LibraryManagement.Api.Mapping;
+using LibraryManagement.Api.Middleware;
+using LibraryManagement.Api.Validators.Categories;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 
@@ -14,8 +20,22 @@ builder.Services.AddDbContext<LibraryDbContext>(options =>
 {
     options.UseNpgsql(builder.Configuration.GetConnectionString("LibraryDb"));
 });
+builder.Services.AddScoped<AuthorMapper>();
+builder.Services.AddScoped<CategoryMapper>();
+builder.Services.AddScoped<BookMapper>();
+builder.Services.AddScoped<IValidator<CreateCategoryDto>, CreateCategoryDtoValidator>();
+builder.Services.AddScoped<IValidator<UpdateCategoryDto>, UpdateCategoryDtoValidator>();
+//builder.Services.AddScoped<IValidator<CreateBookDto>, CreateBookDtoValidator>();
+//builder.Services.AddScoped<IValidator<UpdateBookDto>, UpdateBookDtoValidator>();
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddScoped<LogActionFilter>();
 
 var app = builder.Build();
+
+app.UseExceptionHandler();
+app.UseHttpsRedirection();
+app.UseMiddleware<RequestTimingMiddleware>();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -24,8 +44,6 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference();
     await DataSeeder.SeedAsync(app.Services);
 }
-
-app.UseHttpsRedirection();
 
 //var summaries = new[]
 //{
