@@ -9,7 +9,8 @@ public class ReadBookDto
     public required string Title { get; init; }
     public required int AvailableCopies { get; init; }
     public required int TotalCopies { get; init; }
-    public string CategoryName { get; init; } = null!;
+    public required int CategoryId { get; init; }
+    public required string CategoryName { get; init; }
     public ICollection<BookAuthorDto> Authors { get; init; } = [];
 }
 
@@ -39,4 +40,12 @@ public class UpdateBookDto
     [Required]
     [Range(0, int.MaxValue)]
     public required int TotalCopies { get; init; }
+
+
+    [Required]
+    [Range(1, int.MaxValue)]
+    public required int CategoryId { get; init; }
+
+    [MinLength(1)]
+    public required ICollection<int> AuthorIds { get; init; }
 }

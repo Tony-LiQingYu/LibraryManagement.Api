@@ -3,6 +3,7 @@ using LibraryManagement.Api.DTOs.Authors;
 using LibraryManagement.Api.Entities;
 using LibraryManagement.Api.Filters;
 using LibraryManagement.Api.Mapping;
+using LibraryManagement.Api.RequestParameters;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,11 +24,11 @@ public class AuthorsController : ControllerBase
     }
 
     [HttpGet]
-    [ProducesResponseType(typeof(List<ReadAuthorDto>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<List<ReadAuthorDto>>> GetAll()
+    [ProducesResponseType(typeof(List<ReadAuthorDetailDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<List<ReadAuthorDetailDto>>> GetAll([FromQuery] PaginationParameters pagination)
     {
-        var authors = await _dbContext.Authors.ToListAsync();
-        return Ok(authors.Select(a => _authorMapper.ToReadDto(a)).ToList());
+        var authors = await _dbContext.Authors.OrderBy(a => a.Id).Skip(pagination.PageSize * (pagination.PageNumber - 1)).Take(pagination.PageSize).ToListAsync();
+        return Ok(authors.Select(a => _authorMapper.ToReadDetailDto(a)).ToList());
     }
 
     [HttpGet("{id:int}")]
@@ -35,7 +36,7 @@ public class AuthorsController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ReadAuthorDto>> GetById(int id)
     {
-        var author = await _dbContext.Authors.FindAsync(id);
+        var author = await _dbContext.Authors.Include(a => a.Books).FirstOrDefaultAsync(a => a.Id == id);
         if (author == null)
         {
             return Problem(
@@ -66,7 +67,7 @@ public class AuthorsController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ReadAuthorDto>> Update(int id, UpdateAuthorDto updateAuthorDto)
     {
-        var existingAuthor = await _dbContext.Authors.FindAsync(id);
+        var existingAuthor = await _dbContext.Authors.Include(a => a.Books).FirstOrDefaultAsync(a => a.Id == id);
 
         if (existingAuthor == null)
         {
@@ -86,15 +87,24 @@ public class AuthorsController : ControllerBase
     [HttpDelete("{id:int}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult> Delete(int id)
     {
-        var author = await _dbContext.Authors.FindAsync(id);
+        var author = await _dbContext.Authors.Include(a => a.Books).FirstOrDefaultAsync(a => a.Id == id);
 
         if (author == null)
         {
             return Problem(
                 detail: $"An author with id {id} has not been found.",
                 statusCode: StatusCodes.Status404NotFound
+            );
+        }
+
+        if (author.Books.Any())
+        {
+            return Problem(
+                detail: $"Cannot delete author with id {id}, because they have associated books. Please remove or reassign the books first.",
+                statusCode: StatusCodes.Status409Conflict
             );
         }
 

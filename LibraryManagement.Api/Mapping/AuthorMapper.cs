@@ -6,15 +6,20 @@ using Riok.Mapperly.Abstractions;
 
 namespace LibraryManagement.Api.Mapping;
 
-[Mapper]
+[Mapper(RequiredMappingStrategy = RequiredMappingStrategy.Target)]
 public partial class AuthorMapper
 {
     // Fix RMG023 and RMG020: Map LastName to FamilyName and ignore LastName on target
     [MapProperty(nameof(Author.LastName), nameof(ReadAuthorDto.FamilyName))]
     public partial ReadAuthorDto ToReadDto(Entities.Author source);
+
+    [MapProperty(nameof(Author.LastName), nameof(ReadAuthorDetailDto.FamilyName))]
+    public partial ReadAuthorDetailDto ToReadDetailDto(Entities.Author source);
     [MapperIgnoreTarget(nameof(Author.Id))]
+    [MapperIgnoreTarget(nameof(Author.Books))]
     public partial Author ToEntity(CreateAuthorDto source);
     [MapperIgnoreTarget(nameof(Author.Id))]
+    [MapperIgnoreTarget(nameof(Author.Books))]
     public partial void UpdateEntity(UpdateAuthorDto source, Author target);
 }
 
@@ -28,21 +33,19 @@ public partial class CategoryMapper
     public partial void UpdateEntity(UpdateCategoryDto source, Category target);
 }
 
-[Mapper]
+[Mapper(RequiredMappingStrategy = RequiredMappingStrategy.Target)]
 public partial class BookMapper
 {
-    // Fix RMG020: Explicitly ignore CategoryId since ReadBookDto does not have it
-    [MapProperty(nameof(Book.Category), nameof(ReadBookDto.CategoryName), Use = nameof(MapCategoryName))]
-    [MapperIgnoreSource(nameof(Book.CategoryId))]
     public partial ReadBookDto ToReadDto(Entities.Book source);
 
     [MapperIgnoreTarget(nameof(Book.Id))]
     [MapperIgnoreTarget(nameof(Book.AvailableCopies))]
+    [MapperIgnoreTarget(nameof(Book.Category))]
+    [MapperIgnoreTarget(nameof(Book.Authors))]
     public partial Book ToEntity(CreateBookDto source);
     [MapperIgnoreTarget(nameof(Book.Id))]
     [MapperIgnoreTarget(nameof(Book.AvailableCopies))]
+    [MapperIgnoreTarget(nameof(Book.Category))]
+    [MapperIgnoreTarget(nameof(Book.Authors))]
     public partial void UpdateEntity(UpdateBookDto source, Book target);
-
-    private string MapCategoryName(Category? category)
-        => category?.Name ?? string.Empty;
 }
