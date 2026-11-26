@@ -4,6 +4,10 @@ namespace LibraryManagement.Api.Errors;
 
 public static class BookErrors
 {
+    public static Error NotFound(int id) => Error.NotFound(
+        description: $"A book with id {id} has not been found."
+    );
+
     public static Error CategoryNotFound(int id) => Error.Validation(
         description: $"Category with id {id} does not exist."
     );

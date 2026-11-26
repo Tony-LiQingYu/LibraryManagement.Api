@@ -20,6 +20,17 @@ public class BooksService : IBooksService
         _dbContext = dbContext;
         _bookMapper = bookMapper;
     }
+
+    public async Task<ErrorOr<ReadBookDto>> GetByIdAsync(int id)
+    {
+        var book = await _dbContext.Books.Include(b => b.Category).Include(b => b.Authors).FirstOrDefaultAsync(b => b.Id == id);
+        if (book == null)
+        {
+            return BookErrors.NotFound(id);
+        }
+        return _bookMapper.ToReadDto(book);
+    }
+
     public async Task<ErrorOr<ReadBookDto>> CreateAsync(CreateBookDto createDto)
     {
         var category = await _dbContext.Categories.FirstOrDefaultAsync(c => c.Id == createDto.CategoryId);
@@ -43,6 +54,64 @@ public class BooksService : IBooksService
         await _dbContext.SaveChangesAsync();
 
         return _bookMapper.ToReadDto(book);
+    }
+
+    public async Task<ErrorOr<ReadBookDto>> UpdateAsync(int id, UpdateBookDto updateDto)
+    {
+        var existingBook = await _dbContext.Books.Include(b => b.Authors).FirstOrDefaultAsync(b => b.Id == id);
+
+        if (existingBook == null)
+        {
+            return BookErrors.NotFound(id);
+        }
+
+        var category = await _dbContext.Categories.FirstOrDefaultAsync(c => c.Id == updateDto.CategoryId);
+        if (category is null)
+        {
+            return BookErrors.CategoryNotFound(updateDto.CategoryId);
+        }
+
+        var uniqueAuthorIds = updateDto.AuthorIds.Distinct().ToList();
+        var authors = await _dbContext.Authors.Where(a => uniqueAuthorIds.Contains(a.Id)).ToListAsync();
+        if (authors.Count != uniqueAuthorIds.Count)
+        {
+            return BookErrors.AuthorNotFound();
+        }
+
+        var oldTotalCopies = existingBook.TotalCopies;
+        var newTotalCopies = updateDto.TotalCopies;
+        var totalCopiesAdded = newTotalCopies - oldTotalCopies;
+        if (totalCopiesAdded > 0)
+        {
+            existingBook.AvailableCopies += totalCopiesAdded;
+        }
+        else if (totalCopiesAdded < 0)
+        {
+            existingBook.AvailableCopies += totalCopiesAdded;
+        }
+
+        _bookMapper.UpdateEntity(updateDto, existingBook);
+        existingBook.Category = category;
+        existingBook.Authors = authors;
+
+        await _dbContext.SaveChangesAsync();
+
+        return _bookMapper.ToReadDto(existingBook);
+    }
+
+    public async Task<ErrorOr<Deleted>> DeleteAsync(int id)
+    {
+        var book = await _dbContext.Books.FindAsync(id);
+
+        if (book == null)
+        {
+            return BookErrors.NotFound(id);
+        }
+
+        _dbContext.Books.Remove(book);
+        await _dbContext.SaveChangesAsync();
+
+        return Result.Deleted;
     }
 
     public async Task<ErrorOr<PagedResult<ReadBookDto>>> GetAllAsync(PaginationParameters pagination,
